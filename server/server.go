@@ -24,9 +24,10 @@ func getRandom() int {
 	return rand.Intn((max - min + 1) + min)
 }
 
-func (n node) getSocketServer(i int) {
+func getSocketServer(i int) net.Conn {
 	ln, _ := net.Listen("tcp", ":808"+strconv.Itoa(i))
-	n.conn, _ = ln.Accept()
+	conn, _ := ln.Accept()
+	return conn
 }
 
 func (n node) printAll() {
@@ -44,6 +45,22 @@ func (n node) spam(wg *sync.WaitGroup) {
 	}
 }
 
+func (c node) clientRequest(conn net.Conn) {
+	defer conn.Close() //Закрываем соединение по выходу из функции
+
+	buf := make([]byte, 32) //Буфер для чтения клиентских данных
+	for {
+		conn.Write([]byte("This clientRequest = " + strconv.Itoa(c.id))) //пишем в сокет
+
+		readLen, err := conn.Read(buf) //Читаем из сокета
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		conn.Write(append([]byte("hello"), buf[:readLen]...)) //Пишем в сокет
+	}
+}
+
 func main() {
 	fmt.Println("Launching server...")
 
@@ -51,13 +68,13 @@ func main() {
 
 	for i := 1; i < 10; i++ {
 		fmt.Println(i)
-		massNode[i] = node{id: i}
-		massNode[i].getSocketServer(i)
+		massNode[i] = node{id: i, conn: getSocketServer(i)}
+
 	}
 
-	for _, value := range massNode {
+	for i := 1; i < 10; i++ {
 		wg.Add(1)
-		go value.spam(&wg)
+		go massNode[i].spam(&wg)
 	}
 
 	fmt.Println("progra, waiting")
